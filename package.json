@@ -1,5 +1,6 @@
 {
   "name": "construct-resource-tagger",
+  "description": "AWS CDK aspect that applies tags to L1 (CfnResource) resources of a given type during synthesis.",
   "repository": {
     "type": "git",
     "url": "https://github.com/gammarers-aws-cdk-constructs/construct-resource-tagger.git"
@@ -62,7 +63,11 @@
     "constructs": "^10.5.1"
   },
   "keywords": [
-    "cdk"
+    "aspect",
+    "aws",
+    "aws-cdk",
+    "cdk",
+    "tag"
   ],
   "engines": {
     "node": ">= 20.0.0"
