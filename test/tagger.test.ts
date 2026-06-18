@@ -1,4 +1,4 @@
-import { App, Aspects, Stack } from 'aws-cdk-lib';
+import { App, Aspects, Stack, TagManager } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { CfnVPC } from 'aws-cdk-lib/aws-ec2';
@@ -185,6 +185,121 @@ describe('ConstructResourceTagger', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       Tags: Match.arrayWith([
         tagMatch('env', 'manual'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should skip existing tags in CloudFormation Key format when overwrite is false', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of');
+
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-cfn-key-format',
+        });
+        tagManagerOfSpy.mockReturnValue({
+          renderTags: () => [{ Key: 'env', Value: 'manual' }],
+        } as unknown as TagManager);
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    tagManagerOfSpy.mockRestore();
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('team', 'platform')]),
+    });
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('env', 'prod')]) },
+      0,
+    );
+  });
+
+  test('should apply all tags when overwrite is false and tag manager is unavailable', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of').mockReturnValue(undefined);
+
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-no-tag-manager',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    tagManagerOfSpy.mockRestore();
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should apply all tags when overwrite is false and rendered tags are not an array', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of');
+
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-non-array-tags',
+        });
+        tagManagerOfSpy.mockReturnValue({
+          renderTags: () => ({ Key: 'env', Value: 'manual' }),
+        } as unknown as TagManager);
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    tagManagerOfSpy.mockRestore();
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should ignore unrecognized rendered tag entries when overwrite is false', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of');
+
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-unrecognized-tags',
+        });
+        tagManagerOfSpy.mockReturnValue({
+          renderTags: () => [null, 'invalid', { other: 'value' }],
+        } as unknown as TagManager);
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    tagManagerOfSpy.mockRestore();
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
         tagMatch('team', 'platform'),
       ]),
     });
