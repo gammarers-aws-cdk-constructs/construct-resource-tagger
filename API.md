@@ -19,21 +19,22 @@ const constructResourceTaggerProps: ConstructResourceTaggerProps = { ... }
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.resourceType">resourceType</a></code> | <code>string</code> | CloudFormation type name of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). |
+| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.resourceTypes">resourceTypes</a></code> | <code>string[]</code> | CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.tags">tags</a></code> | <code>{[ key: string ]: string}</code> | Key-value pairs applied to each matching resource. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.overwrite">overwrite</a></code> | <code>boolean</code> | When `false`, tag keys that already exist on a resource are left unchanged and only missing keys are added. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.pathFilter">pathFilter</a></code> | <code>string</code> | Optional construct path substring; |
 
 ---
 
-##### `resourceType`<sup>Required</sup> <a name="resourceType" id="construct-resource-tagger.ConstructResourceTaggerProps.property.resourceType"></a>
+##### `resourceTypes`<sup>Required</sup> <a name="resourceTypes" id="construct-resource-tagger.ConstructResourceTaggerProps.property.resourceTypes"></a>
 
 ```typescript
-public readonly resourceType: string;
+public readonly resourceTypes: string[];
 ```
 
-- *Type:* string
+- *Type:* string[]
 
-CloudFormation type name of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`).
+CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`).
 
 ---
 
@@ -46,6 +47,19 @@ public readonly tags: {[ key: string ]: string};
 - *Type:* {[ key: string ]: string}
 
 Key-value pairs applied to each matching resource.
+
+---
+
+##### `overwrite`<sup>Optional</sup> <a name="overwrite" id="construct-resource-tagger.ConstructResourceTaggerProps.property.overwrite"></a>
+
+```typescript
+public readonly overwrite: boolean;
+```
+
+- *Type:* boolean
+- *Default:* true
+
+When `false`, tag keys that already exist on a resource are left unchanged and only missing keys are added.
 
 ---
 
@@ -85,7 +99,7 @@ new ConstructResourceTagger(props: ConstructResourceTaggerProps)
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#construct-resource-tagger.ConstructResourceTagger.Initializer.parameter.props">props</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a></code> | - Resource type, tags, and optional path filter. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagger.Initializer.parameter.props">props</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a></code> | - Resource types, tags, and optional path filter. |
 
 ---
 
@@ -93,7 +107,7 @@ new ConstructResourceTagger(props: ConstructResourceTaggerProps)
 
 - *Type:* <a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a>
 
-Resource type, tags, and optional path filter.
+Resource types, tags, and optional path filter.
 
 ---
 
@@ -101,7 +115,7 @@ Resource type, tags, and optional path filter.
 
 | **Name** | **Description** |
 | --- | --- |
-| <code><a href="#construct-resource-tagger.ConstructResourceTagger.visit">visit</a></code> | Applies configured tags when `node` is an L1 resource whose CloudFormation type matches `resourceType` and optionally matches `pathFilter`. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagger.visit">visit</a></code> | Applies configured tags when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter`. |
 
 ---
 
@@ -111,7 +125,7 @@ Resource type, tags, and optional path filter.
 public visit(node: IConstruct): void
 ```
 
-Applies configured tags when `node` is an L1 resource whose CloudFormation type matches `resourceType` and optionally matches `pathFilter`.
+Applies configured tags when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter`.
 
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.ConstructResourceTagger.visit.parameter.node"></a>
 

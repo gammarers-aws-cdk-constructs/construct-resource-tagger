@@ -4,13 +4,14 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 
-AWS CDK aspect that applies tags to L1 (`CfnResource`) resources of a given type during synthesis.
+AWS CDK aspect that applies tags to L1 (`CfnResource`) resources during synthesis.
 
 ## Features
 
-- Tag all L1 resources that match a CloudFormation resource type name
-- Apply multiple key-value tags in one aspect
+- Tag L1 resources that match one or more CloudFormation resource type names
+- Apply multiple key-value tags in a single aspect registration
 - Optionally restrict tagging to constructs whose path includes a substring (`pathFilter`)
+- Control whether existing tag keys are overwritten (`overwrite`)
 - Register once on a scope with `Aspects.of(scope).add(...)`
 
 ## Installation
@@ -37,7 +38,7 @@ const stack = new Stack(app, 'MyStack');
 
 Aspects.of(stack).add(
   new ConstructResourceTagger({
-    resourceType: CfnBucket.CFN_RESOURCE_TYPE_NAME,
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
     tags: {
       env: 'prod',
       team: 'platform',
@@ -50,18 +51,43 @@ new CfnBucket(stack, 'Bucket', {
 });
 ```
 
+### Multiple resource types
+
+Pass multiple CloudFormation type names when the same tags should apply to several L1 resource types:
+
+```typescript
+import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { CfnQueue } from 'aws-cdk-lib/aws-sqs';
+
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [
+      CfnBucket.CFN_RESOURCE_TYPE_NAME,
+      CfnTable.CFN_RESOURCE_TYPE_NAME,
+      CfnQueue.CFN_RESOURCE_TYPE_NAME,
+    ],
+    tags: {
+      env: 'prod',
+      team: 'platform',
+    },
+  }),
+);
+```
+
 ### Scoped tagging with `pathFilter`
 
 When you only want to tag resources under a specific part of the construct tree, set `pathFilter` to a substring of `node.path`:
 
 ```typescript
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 const nested = new Construct(stack, 'DataPlane');
 
 Aspects.of(stack).add(
   new ConstructResourceTagger({
-    resourceType: CfnBucket.CFN_RESOURCE_TYPE_NAME,
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
     tags: { tier: 'data' },
     pathFilter: 'DataPlane',
   }),
@@ -71,13 +97,37 @@ new CfnBucket(stack, 'Outside', { bucketName: 'outside-bucket' }); // not tagged
 new CfnBucket(nested, 'Inside', { bucketName: 'inside-bucket' }); // tagged
 ```
 
+### Respecting existing tags
+
+By default, configured tags overwrite existing keys with the same name. Set `overwrite: false` to keep manually defined tags and add only missing keys:
+
+```typescript
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+
+new CfnBucket(stack, 'Bucket', {
+  bucketName: 'my-example-bucket',
+  tags: [{ key: 'env', value: 'staging' }],
+});
+
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    tags: { env: 'prod', team: 'platform' },
+    overwrite: false,
+  }),
+);
+
+// env stays "staging"; team is added as "platform"
+```
+
 ## Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `resourceType` | `string` | Yes | CloudFormation type name (for example `CfnBucket.CFN_RESOURCE_TYPE_NAME`) |
+| `resourceTypes` | `string[]` | Yes | CloudFormation type names (for example `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
 | `tags` | `Record<string, string>` | Yes | Tag key-value pairs applied to each matching resource |
 | `pathFilter` | `string` | No | When set, only resources whose construct path includes this substring are tagged |
+| `overwrite` | `boolean` | No | When `false`, skip tag keys that already exist on the resource (default: `true`) |
 
 ## Requirements
 
