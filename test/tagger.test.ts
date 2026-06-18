@@ -145,6 +145,51 @@ describe('ConstructResourceTagger', () => {
     ).toThrow('resourceTypes must contain at least one resource type.');
   });
 
+  test('should overwrite existing tags by default', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-overwrite-default',
+          tags: [{ key: 'env', value: 'manual' }],
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should skip existing tag keys when overwrite is false', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-skip-existing',
+          tags: [{ key: 'env', value: 'manual' }],
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'manual'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
   test('should tag all matching resources when pathFilter is omitted', () => {
     const template = synth(
       (stack) => {
