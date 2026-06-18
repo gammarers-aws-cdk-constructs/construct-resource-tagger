@@ -4,10 +4,10 @@ import { IConstruct } from 'constructs';
 /** Configuration for {@link ConstructResourceTagger}. */
 export interface ConstructResourceTaggerProps {
   /**
-   * CloudFormation type name of target L1 resources
+   * CloudFormation type names of target L1 resources
    * (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`).
    */
-  readonly resourceType: string;
+  readonly resourceTypes: string[];
   /** Key-value pairs applied to each matching resource. */
   readonly tags: Record<string, string>;
   /**
@@ -24,29 +24,32 @@ export interface ConstructResourceTaggerProps {
  * to tag matching {@link CfnResource} instances during synthesis.
  */
 export class ConstructResourceTagger implements IAspect {
-  private readonly resourceType: string;
+  private readonly resourceTypes: ReadonlySet<string>;
   private readonly tags: Record<string, string>;
   private readonly pathFilter?: string;
 
   /**
-   * @param props - Resource type, tags, and optional path filter.
+   * @param props - Resource types, tags, and optional path filter.
    */
   constructor(props: ConstructResourceTaggerProps) {
-    this.resourceType = props.resourceType;
+    if (props.resourceTypes.length === 0) {
+      throw new Error('resourceTypes must contain at least one resource type.');
+    }
+    this.resourceTypes = new Set(props.resourceTypes);
     this.tags = props.tags;
     this.pathFilter = props.pathFilter;
   }
 
   /**
    * Applies configured tags when `node` is an L1 resource whose CloudFormation
-   * type matches `resourceType` and optionally matches `pathFilter`.
+   * type matches a configured resource type and optionally matches `pathFilter`.
    *
    * @param node - Construct visited during aspect traversal.
    */
   visit(node: IConstruct): void {
     if (
       CfnResource.isCfnResource(node) &&
-      node.cfnResourceType === this.resourceType
+      this.resourceTypes.has(node.cfnResourceType)
     ) {
       if (!this.pathFilter || node.node.path.includes(this.pathFilter)) {
         Object.entries(this.tags).forEach(([key, value]) => {
