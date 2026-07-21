@@ -1,5 +1,6 @@
-import { App, Aspects, Stack, TagManager } from 'aws-cdk-lib';
+import { App, Aspects, Stack, TagManager, Tags } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import { CfnAutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { CfnVPC } from 'aws-cdk-lib/aws-ec2';
 import { CfnBucket } from 'aws-cdk-lib/aws-s3';
@@ -328,5 +329,75 @@ describe('ConstructResourceTagger', () => {
       { Tags: Match.arrayWith([tagMatch('env', 'dev')]) },
       2,
     );
+  });
+
+  test('should overwrite lower-priority tags when tagProps.priority is higher', () => {
+    const template = synth(
+      (stack) => {
+        const bucket = new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-priority-high',
+        });
+        Tags.of(bucket).add('env', 'existing', { priority: 100 });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'policy' },
+        tagProps: { priority: 300 },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'policy')]),
+    });
+  });
+
+  test('should keep higher-priority tags when tagProps.priority is lower', () => {
+    const template = synth(
+      (stack) => {
+        const bucket = new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-priority-low',
+        });
+        Tags.of(bucket).add('env', 'existing', { priority: 300 });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'policy' },
+        tagProps: { priority: 100 },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'existing')]),
+    });
+  });
+
+  test('should forward applyToLaunchedInstances via tagProps', () => {
+    const template = synth(
+      (stack) => {
+        new CfnAutoScalingGroup(stack, 'Asg', {
+          maxSize: '1',
+          minSize: '1',
+          launchTemplate: {
+            launchTemplateId: 'lt-construct-resource-tagger',
+            version: '1',
+          },
+        });
+      },
+      {
+        resourceTypes: [CfnAutoScalingGroup.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+        tagProps: { applyToLaunchedInstances: false },
+      },
+    );
+
+    template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+      Tags: Match.arrayWith([
+        Match.objectLike({
+          Key: 'env',
+          Value: 'prod',
+          PropagateAtLaunch: false,
+        }),
+      ]),
+    });
   });
 });

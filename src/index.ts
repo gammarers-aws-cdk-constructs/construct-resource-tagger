@@ -1,4 +1,4 @@
-import { CfnResource, IAspect, TagManager, Tags } from 'aws-cdk-lib';
+import { CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 
 /** Configuration for {@link ConstructResourceTagger}. */
@@ -6,6 +6,7 @@ export interface ConstructResourceTaggerProps {
   /**
    * CloudFormation type names of target L1 resources
    * (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`).
+   * Must contain at least one entry.
    */
   readonly resourceTypes: string[];
   /** Key-value pairs applied to each matching resource. */
@@ -22,8 +23,22 @@ export interface ConstructResourceTaggerProps {
    * @default true
    */
   readonly overwrite?: boolean;
+  /**
+   * Options forwarded to {@link Tags.add} for each applied tag,
+   * such as `priority` and `applyToLaunchedInstances`.
+   *
+   * @see TagProps
+   */
+  readonly tagProps?: TagProps;
 }
 
+/**
+ * Reads a tag key from a rendered tag entry in either CDK (`key`) or
+ * CloudFormation (`Key`) property form.
+ *
+ * @param tag - A single entry from {@link TagManager.renderTags}.
+ * @returns The tag key, or `undefined` when the entry is unrecognized.
+ */
 const getTagKey = (tag: unknown): string | undefined => {
   if (typeof tag !== 'object' || tag === null) {
     return undefined;
@@ -40,6 +55,12 @@ const getTagKey = (tag: unknown): string | undefined => {
   return undefined;
 };
 
+/**
+ * Collects tag keys already present on a construct via its {@link TagManager}.
+ *
+ * @param node - Construct that may expose a tag manager.
+ * @returns Existing tag keys, or an empty set when tags cannot be determined.
+ */
 const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
   const tagManager = TagManager.of(node);
   if (!tagManager) {
@@ -62,7 +83,8 @@ const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
 };
 
 /**
- * CDK aspect that applies tags to L1 resources of a given type.
+ * CDK aspect that applies tags to L1 resources matching configured
+ * CloudFormation resource types.
  *
  * Register with `Aspects.of(scope).add(new ConstructResourceTagger({ ... }))`
  * to tag matching {@link CfnResource} instances during synthesis.
@@ -72,9 +94,13 @@ export class ConstructResourceTagger implements IAspect {
   private readonly tags: Record<string, string>;
   private readonly pathFilter?: string;
   private readonly overwrite: boolean;
+  private readonly tagProps?: TagProps;
 
   /**
-   * @param props - Resource types, tags, and optional path filter.
+   * Creates a tagger aspect from the given configuration.
+   *
+   * @param props - Resource types, tags, and optional filtering / TagProps options.
+   * @throws If `resourceTypes` is empty.
    */
   constructor(props: ConstructResourceTaggerProps) {
     if (props.resourceTypes.length === 0) {
@@ -84,31 +110,36 @@ export class ConstructResourceTagger implements IAspect {
     this.tags = props.tags;
     this.pathFilter = props.pathFilter;
     this.overwrite = props.overwrite ?? true;
+    this.tagProps = props.tagProps;
   }
 
   /**
    * Applies configured tags when `node` is an L1 resource whose CloudFormation
    * type matches a configured resource type and optionally matches `pathFilter`.
+   * Respects `overwrite` and forwards `tagProps` to {@link Tags.add}.
    *
    * @param node - Construct visited during aspect traversal.
    */
   visit(node: IConstruct): void {
-    if (
-      CfnResource.isCfnResource(node) &&
-      this.resourceTypes.has(node.cfnResourceType)
-    ) {
-      if (!this.pathFilter || node.node.path.includes(this.pathFilter)) {
-        const existingTagKeys = this.overwrite
-          ? undefined
-          : getExistingTagKeys(node);
-
-        Object.entries(this.tags).forEach(([key, value]) => {
-          if (existingTagKeys?.has(key)) {
-            return;
-          }
-          Tags.of(node).add(key, value);
-        });
-      }
+    if (!CfnResource.isCfnResource(node)) {
+      return;
     }
+    if (!this.resourceTypes.has(node.cfnResourceType)) {
+      return;
+    }
+    if (this.pathFilter && !node.node.path.includes(this.pathFilter)) {
+      return;
+    }
+
+    const existingTagKeys = this.overwrite
+      ? undefined
+      : getExistingTagKeys(node);
+
+    Object.entries(this.tags).forEach(([key, value]) => {
+      if (existingTagKeys?.has(key)) {
+        return;
+      }
+      Tags.of(node).add(key, value, this.tagProps);
+    });
   }
 }
