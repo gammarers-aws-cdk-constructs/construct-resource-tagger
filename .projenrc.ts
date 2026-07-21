@@ -7,7 +7,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
   jsiiVersion: '6.0.x',
   defaultReleaseBranch: 'main',
   name: 'construct-resource-tagger',
-  packageManager: javascript.NodePackageManager.YARN_CLASSIC,
+  packageManager: javascript.NodePackageManager.NPM,
   projenrcTs: true,
   repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/construct-resource-tagger.git',
   description: 'AWS CDK aspect that applies tags to L1 (CfnResource) resources of a given type during synthesis.',
