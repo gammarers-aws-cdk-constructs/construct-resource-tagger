@@ -19,10 +19,11 @@ const constructResourceTaggerProps: ConstructResourceTaggerProps = { ... }
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.resourceTypes">resourceTypes</a></code> | <code>string[]</code> | CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). |
+| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.resourceTypes">resourceTypes</a></code> | <code>string[]</code> | CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.tags">tags</a></code> | <code>{[ key: string ]: string}</code> | Key-value pairs applied to each matching resource. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.overwrite">overwrite</a></code> | <code>boolean</code> | When `false`, tag keys that already exist on a resource are left unchanged and only missing keys are added. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.pathFilter">pathFilter</a></code> | <code>string</code> | Optional construct path substring; |
+| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.tagProps">tagProps</a></code> | <code>aws-cdk-lib.TagProps</code> | Options forwarded to {@link Tags.add} for each applied tag, such as `priority` and `applyToLaunchedInstances`. |
 
 ---
 
@@ -34,7 +35,7 @@ public readonly resourceTypes: string[];
 
 - *Type:* string[]
 
-CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`).
+CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry.
 
 ---
 
@@ -78,13 +79,27 @@ when set, only nodes whose
 
 ---
 
+##### `tagProps`<sup>Optional</sup> <a name="tagProps" id="construct-resource-tagger.ConstructResourceTaggerProps.property.tagProps"></a>
+
+```typescript
+public readonly tagProps: TagProps;
+```
+
+- *Type:* aws-cdk-lib.TagProps
+
+Options forwarded to {@link Tags.add} for each applied tag, such as `priority` and `applyToLaunchedInstances`.
+
+> [TagProps](TagProps)
+
+---
+
 ## Classes <a name="Classes" id="Classes"></a>
 
 ### ConstructResourceTagger <a name="ConstructResourceTagger" id="construct-resource-tagger.ConstructResourceTagger"></a>
 
 - *Implements:* aws-cdk-lib.IAspect
 
-CDK aspect that applies tags to L1 resources of a given type.
+CDK aspect that applies tags to L1 resources matching configured CloudFormation resource types.
 
 Register with `Aspects.of(scope).add(new ConstructResourceTagger({ ... }))`
 to tag matching {@link CfnResource} instances during synthesis.
@@ -99,7 +114,7 @@ new ConstructResourceTagger(props: ConstructResourceTaggerProps)
 
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
-| <code><a href="#construct-resource-tagger.ConstructResourceTagger.Initializer.parameter.props">props</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a></code> | - Resource types, tags, and optional path filter. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagger.Initializer.parameter.props">props</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a></code> | - Resource types, tags, and optional filtering / TagProps options. |
 
 ---
 
@@ -107,7 +122,7 @@ new ConstructResourceTagger(props: ConstructResourceTaggerProps)
 
 - *Type:* <a href="#construct-resource-tagger.ConstructResourceTaggerProps">ConstructResourceTaggerProps</a>
 
-Resource types, tags, and optional path filter.
+Resource types, tags, and optional filtering / TagProps options.
 
 ---
 
@@ -126,6 +141,8 @@ public visit(node: IConstruct): void
 ```
 
 Applies configured tags when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter`.
+
+Respects `overwrite` and forwards `tagProps` to {@link Tags.add}.
 
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.ConstructResourceTagger.visit.parameter.node"></a>
 

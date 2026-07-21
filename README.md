@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 
-AWS CDK aspect that applies tags to L1 (`CfnResource`) resources during synthesis.
+AWS CDK aspect that applies tags to matching L1 (`CfnResource`) resources during synthesis.
 
 ## Features
 
@@ -12,6 +12,7 @@ AWS CDK aspect that applies tags to L1 (`CfnResource`) resources during synthesi
 - Apply multiple key-value tags in a single aspect registration
 - Optionally restrict tagging to constructs whose path includes a substring (`pathFilter`)
 - Control whether existing tag keys are overwritten (`overwrite`)
+- Forward CDK `TagProps` such as `priority` and `applyToLaunchedInstances` (`tagProps`)
 - Register once on a scope with `Aspects.of(scope).add(...)`
 
 ## Installation
@@ -120,6 +121,31 @@ Aspects.of(stack).add(
 // env stays "staging"; team is added as "platform"
 ```
 
+### Tag priority and other `TagProps`
+
+Pass CDK [`TagProps`](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.TagProps.html) through `tagProps`. Use `priority` when organizational policies must win over lower-priority tags, or set `applyToLaunchedInstances` for Auto Scaling groups:
+
+```typescript
+import { CfnAutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    tags: { env: 'prod' },
+    tagProps: { priority: 300 },
+  }),
+);
+
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnAutoScalingGroup.CFN_RESOURCE_TYPE_NAME],
+    tags: { env: 'prod' },
+    tagProps: { applyToLaunchedInstances: false },
+  }),
+);
+```
+
 ## Options
 
 | Option | Type | Required | Description |
@@ -128,6 +154,7 @@ Aspects.of(stack).add(
 | `tags` | `Record<string, string>` | Yes | Tag key-value pairs applied to each matching resource |
 | `pathFilter` | `string` | No | When set, only resources whose construct path includes this substring are tagged |
 | `overwrite` | `boolean` | No | When `false`, skip tag keys that already exist on the resource (default: `true`) |
+| `tagProps` | `TagProps` | No | Options forwarded to `Tags.of(node).add(...)`, such as `priority` and `applyToLaunchedInstances` |
 
 ## Requirements
 
