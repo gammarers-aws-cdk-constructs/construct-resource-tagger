@@ -3,7 +3,8 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { CfnAutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { CfnVPC } from 'aws-cdk-lib/aws-ec2';
-import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { CfnPolicy, CfnRole, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Bucket, CfnBucket, CfnBucketPolicy } from 'aws-cdk-lib/aws-s3';
 import { CfnQueue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { ConstructResourceTagger, IPathMatcher, PathMatcher } from '../src';
@@ -11,16 +12,34 @@ import { ConstructResourceTagger, IPathMatcher, PathMatcher } from '../src';
 const tagMatch = (key: string, value: string) =>
   Match.objectLike({ Key: key, Value: value });
 
-function synth(
+const LAMBDA_ASSUME_ROLE_POLICY = {
+  Version: '2012-10-17',
+  Statement: [
+    {
+      Effect: 'Allow',
+      Principal: { Service: 'lambda.amazonaws.com' },
+      Action: 'sts:AssumeRole',
+    },
+  ],
+};
+
+const synthWithAspects = (
   configure: (stack: Stack) => void,
-  taggerProps: ConstructorParameters<typeof ConstructResourceTagger>[0],
-): Template {
+  ...taggers: ConstructResourceTagger[]
+): Template => {
   const app = new App();
   const stack = new Stack(app, 'TestStack');
-  Aspects.of(stack).add(new ConstructResourceTagger(taggerProps));
+  taggers.forEach((tagger) => {
+    Aspects.of(stack).add(tagger);
+  });
   configure(stack);
   return Template.fromStack(stack);
-}
+};
+
+const synth = (
+  configure: (stack: Stack) => void,
+  taggerProps: ConstructorParameters<typeof ConstructResourceTagger>[0],
+): Template => synthWithAspects(configure, new ConstructResourceTagger(taggerProps));
 
 describe('ConstructResourceTagger', () => {
   test('should apply tags to L1 resources of the configured type', () => {
@@ -510,6 +529,252 @@ describe('ConstructResourceTagger', () => {
           PropagateAtLaunch: false,
         }),
       ]),
+    });
+  });
+
+  test('should keep unrelated existing tags when overwriting a conflicting key', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-keep-unrelated',
+          tags: [
+            { key: 'env', value: 'manual' },
+            { key: 'owner', value: 'alice' },
+          ],
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
+        tagMatch('owner', 'alice'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should keep unrelated existing tags when overwrite is false', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-keep-unrelated-no-overwrite',
+          tags: [
+            { key: 'env', value: 'manual' },
+            { key: 'owner', value: 'alice' },
+          ],
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod', team: 'platform' },
+        overwrite: false,
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'manual'),
+        tagMatch('owner', 'alice'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should synthesize without Tags when the configured resource type is not taggable', () => {
+    const template = synth(
+      (stack) => {
+        new CfnPolicy(stack, 'Policy', {
+          policyName: 'construct-resource-tagger-untaggable',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              { Effect: 'Allow', Action: 's3:ListBucket', Resource: '*' },
+            ],
+          },
+        });
+      },
+      {
+        resourceTypes: [CfnPolicy.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+      },
+    );
+
+    template.resourceCountIs('AWS::IAM::Policy', 1);
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      Tags: Match.absent(),
+    });
+  });
+
+  test('should tag taggable resources and skip untaggable ones in the same stack', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-mixed-taggable',
+        });
+        new CfnBucketPolicy(stack, 'Policy', {
+          bucket: 'construct-resource-tagger-mixed-taggable',
+          policyDocument: {
+            Version: '2012-10-17',
+            Statement: [
+              { Effect: 'Allow', Action: 's3:GetObject', Resource: '*' },
+            ],
+          },
+        });
+      },
+      {
+        resourceTypes: [
+          CfnBucket.CFN_RESOURCE_TYPE_NAME,
+          CfnBucketPolicy.CFN_RESOURCE_TYPE_NAME,
+        ],
+        tags: { env: 'prod' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'prod')]),
+    });
+    template.hasResourceProperties('AWS::S3::BucketPolicy', {
+      Tags: Match.absent(),
+    });
+  });
+
+  test('should tag the L1 IAM Role created by an L2 Role construct', () => {
+    const template = synth(
+      (stack) => {
+        new Role(stack, 'FnRole', {
+          assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+        });
+      },
+      {
+        resourceTypes: [CfnRole.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::IAM::Role', {
+      Tags: Match.arrayWith([tagMatch('env', 'prod')]),
+    });
+  });
+
+  test('should tag L1 resources created by a custom construct', () => {
+    class NestedIamResources extends Construct {
+      constructor(scope: Construct, id: string) {
+        super(scope, id);
+        new CfnRole(this, 'Role', {
+          assumeRolePolicyDocument: LAMBDA_ASSUME_ROLE_POLICY,
+        });
+      }
+    }
+
+    const template = synth(
+      (stack) => {
+        new NestedIamResources(stack, 'Workload');
+      },
+      {
+        resourceTypes: [CfnRole.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::IAM::Role', {
+      Tags: Match.arrayWith([tagMatch('env', 'prod')]),
+    });
+  });
+
+  test('should tag the L1 bucket created by an L2 Bucket construct', () => {
+    const template = synth(
+      (stack) => {
+        new Bucket(stack, 'L2Bucket');
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'prod')]),
+    });
+  });
+
+  test('should apply tags from multiple aspects when keys differ', () => {
+    const template = synthWithAspects(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-multi-aspect-keys',
+        });
+      },
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+      }),
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { team: 'platform' },
+      }),
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'prod'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+  });
+
+  test('should let the later aspect win when both overwrite the same key', () => {
+    const template = synthWithAspects(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-multi-aspect-overwrite',
+        });
+      },
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'first' },
+      }),
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'second' },
+      }),
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'second')]),
+    });
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('env', 'first')]) },
+      0,
+    );
+  });
+
+  test('should let the higher-priority aspect win regardless of registration order', () => {
+    const template = synthWithAspects(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-multi-aspect-priority',
+        });
+      },
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'first' },
+        tagProps: { priority: 300 },
+      }),
+      new ConstructResourceTagger({
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'second' },
+        tagProps: { priority: 100 },
+      }),
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('env', 'first')]),
     });
   });
 });
