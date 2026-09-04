@@ -1,5 +1,8 @@
 import { CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
+import { IPathMatcher, PathMatcher } from './path-matcher';
+
+export { IPathMatcher, PathMatcher } from './path-matcher';
 
 /** Configuration for {@link ConstructResourceTagger}. */
 export interface ConstructResourceTaggerProps {
@@ -12,10 +15,23 @@ export interface ConstructResourceTaggerProps {
   /** Key-value pairs applied to each matching resource. */
   readonly tags: Record<string, string>;
   /**
-   * Optional construct path substring; when set, only nodes whose
-   * {@link IConstruct.node | node.path} includes this value are tagged.
+   * Optional construct path prefix matched at `/`-delimited segment
+   * boundaries. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`,
+   * but not `Stack/NonProd`.
+   *
+   * Cannot be combined with {@link pathMatcher}.
+   *
+   * @see PathMatcher.prefix
    */
   readonly pathFilter?: string;
+  /**
+   * Optional matcher that decides whether a construct should be tagged.
+   * Use {@link PathMatcher.pattern} for regular expressions, or implement
+   * {@link IPathMatcher} for a custom predicate.
+   *
+   * Cannot be combined with {@link pathFilter}.
+   */
+  readonly pathMatcher?: IPathMatcher;
   /**
    * When `false`, tag keys that already exist on a resource are left unchanged
    * and only missing keys are added.
@@ -92,7 +108,7 @@ const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
 export class ConstructResourceTagger implements IAspect {
   private readonly resourceTypes: ReadonlySet<string>;
   private readonly tags: Record<string, string>;
-  private readonly pathFilter?: string;
+  private readonly pathMatcher?: IPathMatcher;
   private readonly overwrite: boolean;
   private readonly tagProps?: TagProps;
 
@@ -101,22 +117,31 @@ export class ConstructResourceTagger implements IAspect {
    *
    * @param props - Resource types, tags, and optional filtering / TagProps options.
    * @throws If `resourceTypes` is empty.
+   * @throws If both `pathFilter` and `pathMatcher` are set.
    */
   constructor(props: ConstructResourceTaggerProps) {
     if (props.resourceTypes.length === 0) {
       throw new Error('resourceTypes must contain at least one resource type.');
     }
+    if (props.pathFilter && props.pathMatcher !== undefined) {
+      throw new Error('Specify only one of pathFilter or pathMatcher.');
+    }
     this.resourceTypes = new Set(props.resourceTypes);
     this.tags = props.tags;
-    this.pathFilter = props.pathFilter;
+    let pathMatcher = props.pathMatcher;
+    if (props.pathFilter) {
+      pathMatcher = PathMatcher.prefix(props.pathFilter);
+    }
+    this.pathMatcher = pathMatcher;
     this.overwrite = props.overwrite ?? true;
     this.tagProps = props.tagProps;
   }
 
   /**
    * Applies configured tags when `node` is an L1 resource whose CloudFormation
-   * type matches a configured resource type and optionally matches `pathFilter`.
-   * Respects `overwrite` and forwards `tagProps` to {@link Tags.add}.
+   * type matches a configured resource type and optionally matches `pathFilter`
+   * or `pathMatcher`. Respects `overwrite` and forwards `tagProps` to
+   * {@link Tags.add}.
    *
    * @param node - Construct visited during aspect traversal.
    */
@@ -127,7 +152,7 @@ export class ConstructResourceTagger implements IAspect {
     if (!this.resourceTypes.has(node.cfnResourceType)) {
       return;
     }
-    if (this.pathFilter && !node.node.path.includes(this.pathFilter)) {
+    if (this.pathMatcher && !this.pathMatcher.matches(node)) {
       return;
     }
 

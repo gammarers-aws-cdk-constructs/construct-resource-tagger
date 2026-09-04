@@ -10,7 +10,7 @@ AWS CDK aspect that applies tags to matching L1 (`CfnResource`) resources during
 
 - Tag L1 resources that match one or more CloudFormation resource type names
 - Apply multiple key-value tags in a single aspect registration
-- Optionally restrict tagging to constructs whose path includes a substring (`pathFilter`)
+- Optionally restrict tagging by construct path prefix (`pathFilter`), regular expression, or a custom predicate (`pathMatcher`)
 - Control whether existing tag keys are overwritten (`overwrite`)
 - Forward CDK `TagProps` such as `priority` and `applyToLaunchedInstances` (`tagProps`)
 - Register once on a scope with `Aspects.of(scope).add(...)`
@@ -78,7 +78,7 @@ Aspects.of(stack).add(
 
 ### Scoped tagging with `pathFilter`
 
-When you only want to tag resources under a specific part of the construct tree, set `pathFilter` to a substring of `node.path`:
+When you only want to tag resources under a specific part of the construct tree, set `pathFilter` to a path prefix matched at `/`-delimited segment boundaries. `"Prod"` matches `MyStack/Prod` and `MyStack/Prod/Bucket`, but not `MyStack/NonProd`:
 
 ```typescript
 import { CfnBucket } from 'aws-cdk-lib/aws-s3';
@@ -96,6 +96,35 @@ Aspects.of(stack).add(
 
 new CfnBucket(stack, 'Outside', { bucketName: 'outside-bucket' }); // not tagged
 new CfnBucket(nested, 'Inside', { bucketName: 'inside-bucket' }); // tagged
+```
+
+### Regular expressions and custom predicates with `pathMatcher`
+
+For matching that a path prefix cannot express, pass `pathMatcher` instead of `pathFilter` (the two options cannot be combined).
+
+```typescript
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { ConstructResourceTagger, PathMatcher } from 'construct-resource-tagger';
+
+// Regular expression against node.path
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    tags: { env: 'prod' },
+    pathMatcher: PathMatcher.pattern('(^|/)Prod(/|$)'),
+  }),
+);
+
+// Custom predicate
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    tags: { tier: 'data' },
+    pathMatcher: {
+      matches: (node) => node.node.scope?.node.id === 'DataPlane',
+    },
+  }),
+);
 ```
 
 ### Respecting existing tags
@@ -152,7 +181,8 @@ Aspects.of(stack).add(
 |--------|------|----------|-------------|
 | `resourceTypes` | `string[]` | Yes | CloudFormation type names (for example `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
 | `tags` | `Record<string, string>` | Yes | Tag key-value pairs applied to each matching resource |
-| `pathFilter` | `string` | No | When set, only resources whose construct path includes this substring are tagged |
+| `pathFilter` | `string` | No | When set, only resources whose construct path matches this prefix at `/`-delimited segment boundaries are tagged. Cannot be combined with `pathMatcher`. |
+| `pathMatcher` | `IPathMatcher` | No | Custom path matcher (`PathMatcher.pattern(...)` or `{ matches: (node) => boolean }`). Cannot be combined with `pathFilter`. |
 | `overwrite` | `boolean` | No | When `false`, skip tag keys that already exist on the resource (default: `true`) |
 | `tagProps` | `TagProps` | No | Options forwarded to `Tags.of(node).add(...)`, such as `priority` and `applyToLaunchedInstances` |
 
