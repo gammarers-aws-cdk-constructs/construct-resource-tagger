@@ -6,7 +6,7 @@ import { CfnVPC } from 'aws-cdk-lib/aws-ec2';
 import { CfnBucket } from 'aws-cdk-lib/aws-s3';
 import { CfnQueue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
-import { ConstructResourceTagger } from '../src';
+import { ConstructResourceTagger, IPathMatcher, PathMatcher } from '../src';
 
 const tagMatch = (key: string, value: string) =>
   Match.objectLike({ Key: key, Value: value });
@@ -60,7 +60,7 @@ describe('ConstructResourceTagger', () => {
     });
   });
 
-  test('should tag only resources whose construct path includes pathFilter', () => {
+  test('should tag only resources whose construct path matches pathFilter at segment boundaries', () => {
     const template = synth(
       (stack) => {
         new CfnBucket(stack, 'Outside', {
@@ -89,6 +89,118 @@ describe('ConstructResourceTagger', () => {
       { Tags: Match.arrayWith([tagMatch('scoped', 'yes')]) },
       1,
     );
+  });
+
+  test('should not tag resources when pathFilter is only a substring of a path segment', () => {
+    const template = synth(
+      (stack) => {
+        const nonProd = new Construct(stack, 'NonProd');
+        new CfnBucket(nonProd, 'NonProdBucket', {
+          bucketName: 'construct-resource-tagger-nonprod',
+        });
+        const prod = new Construct(stack, 'Prod');
+        new CfnBucket(prod, 'ProdBucket', {
+          bucketName: 'construct-resource-tagger-prod',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+        pathFilter: 'Prod',
+      },
+    );
+
+    template.resourceCountIs('AWS::S3::Bucket', 2);
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('env', 'prod')]) },
+      1,
+    );
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.absent() },
+      1,
+    );
+  });
+
+  test('should tag resources whose construct path matches a PathMatcher pattern', () => {
+    const template = synth(
+      (stack) => {
+        const nonProd = new Construct(stack, 'NonProd');
+        new CfnBucket(nonProd, 'NonProdBucket', {
+          bucketName: 'construct-resource-tagger-pattern-nonprod',
+        });
+        const prod = new Construct(stack, 'Prod');
+        new CfnBucket(prod, 'ProdBucket', {
+          bucketName: 'construct-resource-tagger-pattern-prod',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { env: 'prod' },
+        pathMatcher: PathMatcher.pattern('(^|/)Prod(/|$)'),
+      },
+    );
+
+    template.resourceCountIs('AWS::S3::Bucket', 2);
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('env', 'prod')]) },
+      1,
+    );
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.absent() },
+      1,
+    );
+  });
+
+  test('should tag resources matching a custom pathMatcher predicate', () => {
+    const matcher: IPathMatcher = {
+      matches: (node) => node.node.scope?.node.id === 'Keep',
+    };
+
+    const template = synth(
+      (stack) => {
+        const skip = new Construct(stack, 'Skip');
+        new CfnBucket(skip, 'SkippedBucket', {
+          bucketName: 'construct-resource-tagger-skip',
+        });
+        const keep = new Construct(stack, 'Keep');
+        new CfnBucket(keep, 'KeptBucket', {
+          bucketName: 'construct-resource-tagger-keep',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: { scoped: 'yes' },
+        pathMatcher: matcher,
+      },
+    );
+
+    template.resourceCountIs('AWS::S3::Bucket', 2);
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('scoped', 'yes')]) },
+      1,
+    );
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.absent() },
+      1,
+    );
+  });
+
+  test('should throw when both pathFilter and pathMatcher are set', () => {
+    expect(
+      () =>
+        new ConstructResourceTagger({
+          resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+          tags: { env: 'prod' },
+          pathFilter: 'Prod',
+          pathMatcher: PathMatcher.prefix('Prod'),
+        }),
+    ).toThrow('Specify only one of pathFilter or pathMatcher.');
   });
 
   test('should apply tags to multiple configured resource types', () => {
