@@ -375,6 +375,7 @@
           "execArgs": [
             "npm",
             "update",
+            "@gammarers/projen-projects",
             "@stylistic/eslint-plugin",
             "@types/jest",
             "@types/node",

@@ -1,15 +1,10 @@
-import { awscdk, javascript, github } from 'projen';
-const project = new awscdk.AwsCdkConstructLibrary({
-  author: 'yicr',
-  authorAddress: 'yicr@users.noreply.github.com',
+import { ProjenCdkConstructLibrary } from '@gammarers/projen-projects';
+const project = new ProjenCdkConstructLibrary({
+  releaseToNpm: true,
+  npmTrustedPublishing: true,
   cdkVersion: '2.232.0',
-  typescriptVersion: '6.0.x',
-  jsiiVersion: '6.0.x',
-  defaultReleaseBranch: 'main',
   name: 'construct-resource-tagger',
-  packageManager: javascript.NodePackageManager.NPM,
-  projenrcTs: true,
-  repositoryUrl: 'https://github.com/gammarers-aws-cdk-constructs/construct-resource-tagger.git',
+  repository: 'https://github.com/gammarers-aws-cdk-constructs/construct-resource-tagger.git',
   description: 'AWS CDK aspect that applies tags to L1 (CfnResource) resources of a given type during synthesis.',
   keywords: [
     'cdk',
@@ -18,39 +13,11 @@ const project = new awscdk.AwsCdkConstructLibrary({
     'aspect',
     'tag',
   ],
-  releaseToNpm: true,
-  npmTrustedPublishing: true,
-  npmAccess: javascript.NpmAccess.PUBLIC,
-  minNodeVersion: '20.0.0',
-  workflowNodeVersion: '24.x',
-  depsUpgradeOptions: {
-    workflowOptions: {
-      labels: ['auto-approve', 'auto-merge'],
-      schedule: javascript.UpgradeDependenciesSchedule.WEEKLY,
-    },
-  },
-  githubOptions: {
-    projenCredentials: github.GithubCredentials.fromApp({
-      permissions: {
-        pullRequests: github.workflows.AppPermission.WRITE,
-        contents: github.workflows.AppPermission.WRITE,
-        workflows: github.workflows.AppPermission.WRITE,
-      },
-    }),
-  },
-  autoApproveOptions: {
-    allowedUsernames: [
-      'gammarers-projen-upgrade-bot[bot]',
-      'yicr',
-    ],
-  },
+  devDeps: [
+    '@gammarers/projen-projects@^0.2.1',
+  ],
   jestOptions: {
     extraCliOptions: ['--silent'],
-  },
-  tsconfigDev: {
-    compilerOptions: {
-      strict: true,
-    },
   },
 });
 project.addPackageIgnore('/.devcontainer');
