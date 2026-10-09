@@ -20,7 +20,7 @@ const constructResourceTaggerProps: ConstructResourceTaggerProps = { ... }
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.resourceTypes">resourceTypes</a></code> | <code>string[]</code> | CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
-| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.tags">tags</a></code> | <code>{[ key: string ]: string}</code> | Key-value pairs applied to each matching resource. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.tags">tags</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTagValues">ConstructResourceTagValues</a> \| {[ key: string ]: string}</code> | Tag key-value pairs applied to each matching resource, or a function that returns them for that resource. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.overwrite">overwrite</a></code> | <code>boolean</code> | When `false`, tag keys that already exist on a resource are left unchanged and only missing keys are added. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.pathFilter">pathFilter</a></code> | <code>string</code> | Optional construct path prefix matched at `/`-delimited segment boundaries. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`, but not `Stack/NonProd`. |
 | <code><a href="#construct-resource-tagger.ConstructResourceTaggerProps.property.pathMatcher">pathMatcher</a></code> | <code><a href="#construct-resource-tagger.IPathMatcher">IPathMatcher</a></code> | Optional matcher that decides whether a construct should be tagged. |
@@ -43,12 +43,15 @@ CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RE
 ##### `tags`<sup>Required</sup> <a name="tags" id="construct-resource-tagger.ConstructResourceTaggerProps.property.tags"></a>
 
 ```typescript
-public readonly tags: {[ key: string ]: string};
+public readonly tags: ConstructResourceTagValues | {[ key: string ]: string};
 ```
 
-- *Type:* {[ key: string ]: string}
+- *Type:* <a href="#construct-resource-tagger.ConstructResourceTagValues">ConstructResourceTagValues</a> | {[ key: string ]: string}
 
-Key-value pairs applied to each matching resource.
+Tag key-value pairs applied to each matching resource, or a function that returns them for that resource.
+
+The function runs once per L1
+resource that passes the resource type and path filters.
 
 ---
 
@@ -112,6 +115,21 @@ Options forwarded to {@link Tags.add} for each applied tag, such as `priority` a
 
 ---
 
+### ConstructResourceTagValues <a name="ConstructResourceTagValues" id="construct-resource-tagger.ConstructResourceTagValues"></a>
+
+Builds tag key-value pairs for one matching construct.
+
+Stack name, construct ID, and path are available on `node`.
+
+#### Initializer <a name="Initializer" id="construct-resource-tagger.ConstructResourceTagValues.Initializer"></a>
+
+```typescript
+import { ConstructResourceTagValues } from 'construct-resource-tagger'
+
+const constructResourceTagValues: ConstructResourceTagValues = { ... }
+```
+
+
 ## Classes <a name="Classes" id="Classes"></a>
 
 ### ConstructResourceTagger <a name="ConstructResourceTagger" id="construct-resource-tagger.ConstructResourceTagger"></a>
@@ -161,7 +179,8 @@ public visit(node: IConstruct): void
 
 Applies configured tags when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter` or `pathMatcher`.
 
-Respects `overwrite` and forwards `tagProps` to
+When `tags` is a function, it is called for that
+resource. Respects `overwrite` and forwards `tagProps` to
 {@link Tags.add}.
 
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.ConstructResourceTagger.visit.parameter.node"></a>

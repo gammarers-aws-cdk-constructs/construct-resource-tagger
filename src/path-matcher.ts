@@ -1,4 +1,5 @@
 import { IConstruct } from 'constructs';
+import { matchesPathPrefix } from './path-matcher-predicates';
 
 /**
  * Decides whether a construct should be tagged based on its location in the
@@ -15,37 +16,6 @@ export interface IPathMatcher {
 }
 
 type PathMatcherKind = 'prefix' | 'pattern';
-
-/**
- * Returns whether `prefix` appears as a contiguous sequence of `/`-delimited
- * segments in `path`. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`,
- * but not `Stack/NonProd`.
- *
- * @param path - Construct path (`IConstruct.node.path`).
- * @param prefix - Path segments to match (for example `Prod` or `App/Prod`).
- * @returns True when `prefix` matches at a segment boundary.
- */
-const matchesPathPrefix = (path: string, prefix: string): boolean => {
-  const pathSegments = path.split('/');
-  const prefixSegments = prefix.split('/');
-
-  const startsAt = (offset: number): boolean =>
-    prefixSegments.every(
-      (segment, index) => pathSegments[offset + index] === segment,
-    );
-
-  const canStartAt = (offset: number): boolean =>
-    offset + prefixSegments.length <= pathSegments.length;
-
-  let offset = 0;
-  while (canStartAt(offset)) {
-    if (startsAt(offset)) {
-      return true;
-    }
-    offset += 1;
-  }
-  return false;
-};
 
 /**
  * Built-in {@link IPathMatcher} implementations for construct path matching.
