@@ -4,6 +4,18 @@ import { IPathMatcher, PathMatcher } from './path-matcher';
 
 export { IPathMatcher, PathMatcher } from './path-matcher';
 
+/**
+ * Builds tag key-value pairs for one matching construct.
+ * Stack name, construct ID, and path are available on `node`.
+ */
+export interface ConstructResourceTagValues {
+  /**
+   * @param node - L1 resource that passed resource type and path filters.
+   * @returns Tag key-value pairs applied to `node`.
+   */
+  (node: IConstruct): Record<string, string>;
+}
+
 /** Configuration for {@link ConstructResourceTagger}. */
 export interface ConstructResourceTaggerProps {
   /**
@@ -12,8 +24,12 @@ export interface ConstructResourceTaggerProps {
    * Must contain at least one entry.
    */
   readonly resourceTypes: string[];
-  /** Key-value pairs applied to each matching resource. */
-  readonly tags: Record<string, string>;
+  /**
+   * Tag key-value pairs applied to each matching resource, or a function
+   * that returns them for that resource. The function runs once per L1
+   * resource that passes the resource type and path filters.
+   */
+  readonly tags: Record<string, string> | ConstructResourceTagValues;
   /**
    * Optional construct path prefix matched at `/`-delimited segment
    * boundaries. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`,
@@ -99,6 +115,23 @@ const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
 };
 
 /**
+ * Returns the tag map for `node`, invoking a callback when `tags` is a function.
+ *
+ * @param tags - Static tag map or a per-construct resolver.
+ * @param node - Matching L1 resource.
+ * @returns Tag key-value pairs to apply.
+ */
+const resolveTags = (
+  tags: Record<string, string> | ConstructResourceTagValues,
+  node: IConstruct,
+): Record<string, string> => {
+  if (typeof tags === 'function') {
+    return tags(node);
+  }
+  return tags;
+};
+
+/**
  * CDK aspect that applies tags to L1 resources matching configured
  * CloudFormation resource types.
  *
@@ -107,7 +140,7 @@ const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
  */
 export class ConstructResourceTagger implements IAspect {
   private readonly resourceTypes: ReadonlySet<string>;
-  private readonly tags: Record<string, string>;
+  private readonly tags: Record<string, string> | ConstructResourceTagValues;
   private readonly pathMatcher?: IPathMatcher;
   private readonly overwrite: boolean;
   private readonly tagProps?: TagProps;
@@ -140,7 +173,8 @@ export class ConstructResourceTagger implements IAspect {
   /**
    * Applies configured tags when `node` is an L1 resource whose CloudFormation
    * type matches a configured resource type and optionally matches `pathFilter`
-   * or `pathMatcher`. Respects `overwrite` and forwards `tagProps` to
+   * or `pathMatcher`. When `tags` is a function, it is called for that
+   * resource. Respects `overwrite` and forwards `tagProps` to
    * {@link Tags.add}.
    *
    * @param node - Construct visited during aspect traversal.
@@ -156,11 +190,12 @@ export class ConstructResourceTagger implements IAspect {
       return;
     }
 
+    const tags = resolveTags(this.tags, node);
     const existingTagKeys = this.overwrite
       ? undefined
       : getExistingTagKeys(node);
 
-    Object.entries(this.tags).forEach(([key, value]) => {
+    Object.entries(tags).forEach(([key, value]) => {
       if (existingTagKeys?.has(key)) {
         return;
       }
