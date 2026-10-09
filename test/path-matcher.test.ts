@@ -2,6 +2,7 @@ import { IConstruct } from 'constructs';
 import { PathMatcher } from '../src';
 
 const constructAt = (path: string): IConstruct =>
+  // Path matching reads node.path. IConstruct has no path-only factory.
   ({ node: { path } }) as unknown as IConstruct;
 
 describe('PathMatcher.prefix', () => {

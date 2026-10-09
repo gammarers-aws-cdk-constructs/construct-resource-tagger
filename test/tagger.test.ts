@@ -12,6 +12,12 @@ import { ConstructResourceTagger, IPathMatcher, PathMatcher } from '../src';
 const tagMatch = (key: string, value: string) =>
   Match.objectLike({ Key: key, Value: value });
 
+const asTagManager = (
+  tagManager: { renderTags: () => unknown },
+): TagManager =>
+  // TagManager has no factory for a renderTags-only double.
+  tagManager as unknown as TagManager;
+
 const LAMBDA_ASSUME_ROLE_POLICY = {
   Version: '2012-10-17',
   Statement: [
@@ -330,9 +336,9 @@ describe('ConstructResourceTagger', () => {
         new CfnBucket(stack, 'Bucket', {
           bucketName: 'construct-resource-tagger-cfn-key-format',
         });
-        tagManagerOfSpy.mockReturnValue({
+        tagManagerOfSpy.mockReturnValue(asTagManager({
           renderTags: () => [{ Key: 'env', Value: 'manual' }],
-        } as unknown as TagManager);
+        }));
       },
       {
         resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
@@ -387,9 +393,9 @@ describe('ConstructResourceTagger', () => {
         new CfnBucket(stack, 'Bucket', {
           bucketName: 'construct-resource-tagger-non-array-tags',
         });
-        tagManagerOfSpy.mockReturnValue({
+        tagManagerOfSpy.mockReturnValue(asTagManager({
           renderTags: () => ({ Key: 'env', Value: 'manual' }),
-        } as unknown as TagManager);
+        }));
       },
       {
         resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
@@ -416,9 +422,9 @@ describe('ConstructResourceTagger', () => {
         new CfnBucket(stack, 'Bucket', {
           bucketName: 'construct-resource-tagger-unrecognized-tags',
         });
-        tagManagerOfSpy.mockReturnValue({
+        tagManagerOfSpy.mockReturnValue(asTagManager({
           renderTags: () => [null, 'invalid', { other: 'value' }],
-        } as unknown as TagManager);
+        }));
       },
       {
         resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
