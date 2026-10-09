@@ -6,7 +6,7 @@ import { CfnVPC } from 'aws-cdk-lib/aws-ec2';
 import { CfnPolicy, CfnRole, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Bucket, CfnBucket, CfnBucketPolicy } from 'aws-cdk-lib/aws-s3';
 import { CfnQueue } from 'aws-cdk-lib/aws-sqs';
-import { Construct } from 'constructs';
+import { Construct, IConstruct } from 'constructs';
 import { ConstructResourceTagger, IPathMatcher, PathMatcher } from '../src';
 
 const tagMatch = (key: string, value: string) =>
@@ -776,5 +776,137 @@ describe('ConstructResourceTagger', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       Tags: Match.arrayWith([tagMatch('env', 'first')]),
     });
+  });
+
+  test('should apply tag values derived from stack name, construct id, and path', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-dynamic',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: (node) => ({
+          stack: Stack.of(node).stackName,
+          id: node.node.id,
+          path: node.node.path,
+        }),
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('stack', 'TestStack')]),
+    });
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('id', 'Bucket')]),
+    });
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([tagMatch('path', 'TestStack/Bucket')]),
+    });
+  });
+
+  test('should resolve callback tags separately for each matching resource', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'First', {
+          bucketName: 'construct-resource-tagger-dynamic-first',
+        });
+        new CfnBucket(stack, 'Second', {
+          bucketName: 'construct-resource-tagger-dynamic-second',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: (node) => ({
+          id: node.node.id,
+        }),
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'construct-resource-tagger-dynamic-first',
+      Tags: Match.arrayWith([tagMatch('id', 'First')]),
+    });
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'construct-resource-tagger-dynamic-second',
+      Tags: Match.arrayWith([tagMatch('id', 'Second')]),
+    });
+  });
+
+  test('should not call the tag callback for other resource types', () => {
+    const tags = jest.fn((node: IConstruct): Record<string, string> => ({
+      id: node.node.id,
+    }));
+
+    synth(
+      (stack) => {
+        new CfnVPC(stack, 'Vpc', { cidrBlock: '10.0.0.0/16' });
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-dynamic-callback',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags,
+      },
+    );
+
+    expect(tags).toHaveBeenCalledTimes(1);
+    expect(tags.mock.calls[0][0].node.id).toBe('Bucket');
+  });
+
+  test('should not call the tag callback when pathFilter does not match', () => {
+    const tags = jest.fn<Record<string, string>, [IConstruct]>(() => ({
+      scoped: 'yes',
+    }));
+
+    synth(
+      (stack) => {
+        new CfnBucket(stack, 'Outside', {
+          bucketName: 'construct-resource-tagger-dynamic-outside',
+        });
+        const nested = new Construct(stack, 'Filtered');
+        new CfnBucket(nested, 'Inside', {
+          bucketName: 'construct-resource-tagger-dynamic-inside',
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags,
+        pathFilter: 'Filtered',
+      },
+    );
+
+    expect(tags).toHaveBeenCalledTimes(1);
+    expect(tags.mock.calls[0][0].node.path).toBe('TestStack/Filtered/Inside');
+  });
+
+  test('should skip existing tag keys when callback tags and overwrite is false', () => {
+    const template = synth(
+      (stack) => {
+        new CfnBucket(stack, 'Bucket', {
+          bucketName: 'construct-resource-tagger-dynamic-skip-existing',
+          tags: [{ key: 'env', value: 'manual' }],
+        });
+      },
+      {
+        resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+        tags: () => ({ env: 'prod', team: 'platform' }),
+        overwrite: false,
+      },
+    );
+
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      Tags: Match.arrayWith([
+        tagMatch('env', 'manual'),
+        tagMatch('team', 'platform'),
+      ]),
+    });
+    template.resourcePropertiesCountIs(
+      'AWS::S3::Bucket',
+      { Tags: Match.arrayWith([tagMatch('env', 'prod')]) },
+      0,
+    );
   });
 });
