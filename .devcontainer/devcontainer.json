@@ -9,7 +9,7 @@
     },
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/node:2": {
-      "version": "26",
+      "version": "24",
       "npmVersion": "12"
     },
     "ghcr.io/devcontainers/features/dotnet:1": {},

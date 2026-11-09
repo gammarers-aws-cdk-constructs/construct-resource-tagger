@@ -14,7 +14,7 @@ const project = new ProjenCdkConstructLibrary({
     'tag',
   ],
   devDeps: [
-    '@gammarers/projen-projects@^0.7.1',
+    '@gammarers/projen-projects@^0.8.0',
   ],
 });
 project.synth();
