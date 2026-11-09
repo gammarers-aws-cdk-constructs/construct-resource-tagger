@@ -1,5 +1,6 @@
-import { CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
+import { Aspects, CfnResource, IAspect, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
+import { ConstructResourceTaggerUnreadableTagsError, readExistingTagKeys } from './existing-tag-keys';
 import { IPathMatcher, PathMatcher } from './path-matcher';
 
 /**
@@ -12,6 +13,21 @@ export interface ConstructResourceTagValues {
    * @returns Tag key-value pairs applied to `node`.
    */
   (node: IConstruct): Record<string, string>;
+}
+
+/** Configuration for {@link ConstructResourceTagger.apply}. */
+export interface ApplyResourceTaggersProps {
+  /**
+   * Scopes that receive every tagger.
+   * Must contain at least one scope.
+   */
+  readonly scopes: IConstruct[];
+  /**
+   * Aspects registered on each scope, in array order.
+   * A later tagger overwrites the same tag key when priorities are equal.
+   * Must contain at least one tagger.
+   */
+  readonly taggers: ConstructResourceTagger[];
 }
 
 /** Configuration for {@link ConstructResourceTagger}. */
@@ -63,56 +79,6 @@ export interface ConstructResourceTaggerProps {
 }
 
 /**
- * Reads a tag key from a rendered tag entry in either CDK (`key`) or
- * CloudFormation (`Key`) property form.
- *
- * @param tag - A single entry from {@link TagManager.renderTags}.
- * @returns The tag key, or `undefined` when the entry is unrecognized.
- */
-const getTagKey = (tag: unknown): string | undefined => {
-  if (typeof tag !== 'object' || tag === null) {
-    return undefined;
-  }
-
-  if ('key' in tag && typeof tag.key === 'string') {
-    return tag.key;
-  }
-
-  if ('Key' in tag && typeof tag.Key === 'string') {
-    return tag.Key;
-  }
-
-  return undefined;
-};
-
-/**
- * Collects tag keys already present on a construct via its {@link TagManager}.
- *
- * @param node - Construct that may expose a tag manager.
- * @returns Existing tag keys, or an empty set when tags cannot be determined.
- */
-const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
-  const tagManager = TagManager.of(node);
-  if (!tagManager) {
-    return new Set();
-  }
-
-  const rendered = tagManager.renderTags();
-  if (!Array.isArray(rendered)) {
-    return new Set();
-  }
-
-  const keys = new Set<string>();
-  for (const tag of rendered) {
-    const key = getTagKey(tag);
-    if (key !== undefined) {
-      keys.add(key);
-    }
-  }
-  return keys;
-};
-
-/**
  * Returns the tag map for `node`, invoking a callback when `tags` is a function.
  *
  * @param tags - Static tag map or a per-construct resolver.
@@ -135,8 +101,32 @@ const resolveTags = (
  *
  * Register with `Aspects.of(scope).add(new ConstructResourceTagger({ ... }))`
  * to tag matching {@link CfnResource} instances during synthesis.
+ * {@link ConstructResourceTagger.apply} registers several taggers on one or more scopes.
  */
 export class ConstructResourceTagger implements IAspect {
+  /**
+   * Registers each tagger on every scope, preserving tagger order.
+   *
+   * @param props - Scopes and the taggers to register on each of them.
+   * @throws If `scopes` is empty.
+   * @throws If `taggers` is empty.
+   */
+  public static apply(props: ApplyResourceTaggersProps): void {
+    if (props.scopes.length === 0) {
+      throw new Error('scopes must contain at least one scope.');
+    }
+    if (props.taggers.length === 0) {
+      throw new Error('taggers must contain at least one tagger.');
+    }
+
+    for (const scope of props.scopes) {
+      const aspects = Aspects.of(scope);
+      for (const tagger of props.taggers) {
+        aspects.add(tagger);
+      }
+    }
+  }
+
   private readonly resourceTypes: ReadonlySet<string>;
   private readonly tags: Record<string, string> | ConstructResourceTagValues;
   private readonly pathMatcher?: IPathMatcher;
@@ -189,15 +179,24 @@ export class ConstructResourceTagger implements IAspect {
     }
 
     const tags = resolveTags(this.tags, node);
-    const existingTagKeys = this.overwrite
-      ? undefined
-      : getExistingTagKeys(node);
+    let existingTagKeys: ReadonlySet<string> | undefined;
+    if (!this.overwrite) {
+      try {
+        existingTagKeys = readExistingTagKeys(node);
+      } catch (error) {
+        if (!(error instanceof ConstructResourceTaggerUnreadableTagsError)) {
+          throw error;
+        }
+        // Unreadable tags are treated as absent so missing keys can still be added.
+        existingTagKeys = new Set();
+      }
+    }
 
-    Object.entries(tags).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(tags)) {
       if (existingTagKeys?.has(key)) {
-        return;
+        continue;
       }
       Tags.of(node).add(key, value, this.tagProps);
-    });
+    }
   }
 }

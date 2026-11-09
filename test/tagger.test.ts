@@ -385,6 +385,31 @@ describe('ConstructResourceTagger', () => {
     });
   });
 
+  test('should rethrow unexpected errors while reading existing tags', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of').mockImplementation(() => {
+      throw new Error('unexpected');
+    });
+
+    try {
+      expect(() =>
+        synth(
+          (stack) => {
+            new CfnBucket(stack, 'Bucket', {
+              bucketName: 'construct-resource-tagger-unexpected-read',
+            });
+          },
+          {
+            resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+            tags: { env: 'prod' },
+            overwrite: false,
+          },
+        ),
+      ).toThrow('unexpected');
+    } finally {
+      tagManagerOfSpy.mockRestore();
+    }
+  });
+
   test('should apply all tags when overwrite is false and rendered tags are not an array', () => {
     const tagManagerOfSpy = jest.spyOn(TagManager, 'of');
 
