@@ -1,5 +1,6 @@
-import { Aspects, CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
+import { Aspects, CfnResource, IAspect, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
+import { readExistingTagKeys } from './existing-tag-keys';
 import { IPathMatcher, PathMatcher } from './path-matcher';
 
 /**
@@ -76,56 +77,6 @@ export interface ConstructResourceTaggerProps {
    */
   readonly tagProps?: TagProps;
 }
-
-/**
- * Reads a tag key from a rendered tag entry in either CDK (`key`) or
- * CloudFormation (`Key`) property form.
- *
- * @param tag - A single entry from {@link TagManager.renderTags}.
- * @returns The tag key, or `undefined` when the entry is unrecognized.
- */
-const getTagKey = (tag: unknown): string | undefined => {
-  if (typeof tag !== 'object' || tag === null) {
-    return undefined;
-  }
-
-  if ('key' in tag && typeof tag.key === 'string') {
-    return tag.key;
-  }
-
-  if ('Key' in tag && typeof tag.Key === 'string') {
-    return tag.Key;
-  }
-
-  return undefined;
-};
-
-/**
- * Collects tag keys already present on a construct via its {@link TagManager}.
- *
- * @param node - Construct that may expose a tag manager.
- * @returns Existing tag keys, or an empty set when tags cannot be determined.
- */
-const getExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
-  const tagManager = TagManager.of(node);
-  if (!tagManager) {
-    return new Set();
-  }
-
-  const rendered = tagManager.renderTags();
-  if (!Array.isArray(rendered)) {
-    return new Set();
-  }
-
-  const keys = new Set<string>();
-  for (const tag of rendered) {
-    const key = getTagKey(tag);
-    if (key !== undefined) {
-      keys.add(key);
-    }
-  }
-  return keys;
-};
 
 /**
  * Returns the tag map for `node`, invoking a callback when `tags` is a function.
@@ -228,9 +179,11 @@ export class ConstructResourceTagger implements IAspect {
     }
 
     const tags = resolveTags(this.tags, node);
-    const existingTagKeys = this.overwrite
-      ? undefined
-      : getExistingTagKeys(node);
+    let existingTagKeys: ReadonlySet<string> | undefined;
+    if (!this.overwrite) {
+      const read = readExistingTagKeys(node);
+      existingTagKeys = read.kind === 'readable' ? read.keys : new Set();
+    }
 
     Object.entries(tags).forEach(([key, value]) => {
       if (existingTagKeys?.has(key)) {

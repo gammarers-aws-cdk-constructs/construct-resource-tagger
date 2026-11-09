@@ -165,6 +165,88 @@ Options forwarded to {@link Tags.add} for each applied tag, such as `priority` a
 
 ---
 
+### ConstructResourceTagValidatorProps <a name="ConstructResourceTagValidatorProps" id="construct-resource-tagger.ConstructResourceTagValidatorProps"></a>
+
+Configuration for {@link ConstructResourceTagValidator}.
+
+#### Initializer <a name="Initializer" id="construct-resource-tagger.ConstructResourceTagValidatorProps.Initializer"></a>
+
+```typescript
+import { ConstructResourceTagValidatorProps } from 'construct-resource-tagger'
+
+const constructResourceTagValidatorProps: ConstructResourceTagValidatorProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidatorProps.property.requiredTagKeys">requiredTagKeys</a></code> | <code>string[]</code> | Tag keys that must be present on each matching L1 resource. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidatorProps.property.resourceTypes">resourceTypes</a></code> | <code>string[]</code> | CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidatorProps.property.pathFilter">pathFilter</a></code> | <code>string</code> | Optional construct path prefix matched at `/`-delimited segment boundaries. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`, but not `Stack/NonProd`. |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidatorProps.property.pathMatcher">pathMatcher</a></code> | <code><a href="#construct-resource-tagger.IPathMatcher">IPathMatcher</a></code> | Optional matcher that decides whether a construct should be checked. |
+
+---
+
+##### `requiredTagKeys`<sup>Required</sup> <a name="requiredTagKeys" id="construct-resource-tagger.ConstructResourceTagValidatorProps.property.requiredTagKeys"></a>
+
+```typescript
+public readonly requiredTagKeys: string[];
+```
+
+- *Type:* string[]
+
+Tag keys that must be present on each matching L1 resource.
+
+Values are not checked. Must contain at least one entry.
+
+---
+
+##### `resourceTypes`<sup>Required</sup> <a name="resourceTypes" id="construct-resource-tagger.ConstructResourceTagValidatorProps.property.resourceTypes"></a>
+
+```typescript
+public readonly resourceTypes: string[];
+```
+
+- *Type:* string[]
+
+CloudFormation type names of target L1 resources (for example, `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry.
+
+---
+
+##### `pathFilter`<sup>Optional</sup> <a name="pathFilter" id="construct-resource-tagger.ConstructResourceTagValidatorProps.property.pathFilter"></a>
+
+```typescript
+public readonly pathFilter: string;
+```
+
+- *Type:* string
+
+Optional construct path prefix matched at `/`-delimited segment boundaries. `"Prod"` matches `Stack/Prod` and `Stack/Prod/Bucket`, but not `Stack/NonProd`.
+
+Cannot be combined with {@link pathMatcher}.
+
+> [PathMatcher.prefix](PathMatcher.prefix)
+
+---
+
+##### `pathMatcher`<sup>Optional</sup> <a name="pathMatcher" id="construct-resource-tagger.ConstructResourceTagValidatorProps.property.pathMatcher"></a>
+
+```typescript
+public readonly pathMatcher: IPathMatcher;
+```
+
+- *Type:* <a href="#construct-resource-tagger.IPathMatcher">IPathMatcher</a>
+
+Optional matcher that decides whether a construct should be checked.
+
+Use {@link PathMatcher.pattern} for regular expressions, or implement
+{@link IPathMatcher} for a custom predicate.
+
+Cannot be combined with {@link pathFilter}.
+
+---
+
 ### ConstructResourceTagValues <a name="ConstructResourceTagValues" id="construct-resource-tagger.ConstructResourceTagValues"></a>
 
 Builds tag key-value pairs for one matching construct.
@@ -267,6 +349,66 @@ Registers each tagger on every scope, preserving tagger order.
 Scopes and the taggers to register on each of them.
 
 ---
+
+
+
+### ConstructResourceTagValidator <a name="ConstructResourceTagValidator" id="construct-resource-tagger.ConstructResourceTagValidator"></a>
+
+- *Implements:* aws-cdk-lib.IAspect
+
+CDK aspect that reports missing required tag keys on matching L1 resources.
+
+Register with `Aspects.of(scope).add(new ConstructResourceTagValidator({ ... }))`
+after taggers when those taggers should satisfy the check. This aspect does
+not apply tags. A missing key, or tags that cannot be read, adds an error
+annotation and synthesis fails.
+
+#### Initializers <a name="Initializers" id="construct-resource-tagger.ConstructResourceTagValidator.Initializer"></a>
+
+```typescript
+import { ConstructResourceTagValidator } from 'construct-resource-tagger'
+
+new ConstructResourceTagValidator(props: ConstructResourceTagValidatorProps)
+```
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidator.Initializer.parameter.props">props</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTagValidatorProps">ConstructResourceTagValidatorProps</a></code> | - Resource types, required tag keys, and optional path filters. |
+
+---
+
+##### `props`<sup>Required</sup> <a name="props" id="construct-resource-tagger.ConstructResourceTagValidator.Initializer.parameter.props"></a>
+
+- *Type:* <a href="#construct-resource-tagger.ConstructResourceTagValidatorProps">ConstructResourceTagValidatorProps</a>
+
+Resource types, required tag keys, and optional path filters.
+
+---
+
+#### Methods <a name="Methods" id="Methods"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagValidator.visit">visit</a></code> | Reports missing required tag keys when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter` or `pathMatcher`. |
+
+---
+
+##### `visit` <a name="visit" id="construct-resource-tagger.ConstructResourceTagValidator.visit"></a>
+
+```typescript
+public visit(node: IConstruct): void
+```
+
+Reports missing required tag keys when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter` or `pathMatcher`.
+
+###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.ConstructResourceTagValidator.visit.parameter.node"></a>
+
+- *Type:* constructs.IConstruct
+
+Construct visited during aspect traversal.
+
+---
+
 
 
 

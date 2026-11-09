@@ -5,7 +5,7 @@ const project = new ProjenCdkConstructLibrary({
   cdkVersion: '2.232.0',
   name: 'construct-resource-tagger',
   repository: 'https://github.com/gammarers-aws-cdk-constructs/construct-resource-tagger.git',
-  description: 'AWS CDK aspect that applies tags to L1 (CfnResource) resources of a given type during synthesis.',
+  description: 'AWS CDK aspects that apply tags to matching L1 (CfnResource) resources and report missing required tag keys during synthesis.',
   keywords: [
     'cdk',
     'aws',

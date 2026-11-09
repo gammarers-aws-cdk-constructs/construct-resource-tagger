@@ -7,7 +7,7 @@
 
 [![View on Construct Hub](https://constructs.dev/badge?package=construct-resource-tagger)](https://constructs.dev/packages/construct-resource-tagger)
 
-AWS CDK aspect that applies tags to matching L1 (`CfnResource`) resources during synthesis.
+AWS CDK aspects that apply tags to matching L1 (`CfnResource`) resources during synthesis, and report missing required tag keys.
 
 ## Features
 
@@ -19,10 +19,13 @@ AWS CDK aspect that applies tags to matching L1 (`CfnResource`) resources during
 - Forward CDK `TagProps` such as `priority` and `applyToLaunchedInstances` (`tagProps`)
 - Register once on a scope with `Aspects.of(scope).add(...)`
 - Register one ordered list of taggers on one or more scopes with `ConstructResourceTagger.apply`
+- Report missing required tag keys on matching L1 resources with `ConstructResourceTagValidator`
 
 ## How it works
 
 Register `ConstructResourceTagger` on a scope with `Aspects.of(scope).add(...)`. `ConstructResourceTagger.apply` does the same registration for one ordered list of taggers on every scope in `scopes`. During synthesis, CDK visits each construct in that scope. The aspect applies tags when the construct is an L1 resource whose CloudFormation type is listed in `resourceTypes` and, when set, whose path matches `pathFilter` or `pathMatcher`. Tag values come from a fixed map or from a function of that construct. Existing keys are replaced unless `overwrite` is `false`. Each applied tag is added with `Tags.of(node).add`, including any `tagProps`.
+
+`ConstructResourceTagValidator` checks that required tag keys are present on matching L1 resources. It does not apply tags. Register it after the taggers on the same scope when those taggers should satisfy the check. Aspects run in registration order. A missing key, or tags that cannot be read, adds an error annotation and synthesis fails. Resources of other types, and resources outside `pathFilter` or `pathMatcher`, are left unchanged.
 
 ## Installation
 
@@ -239,6 +242,29 @@ Aspects.of(stack).add(
 );
 ```
 
+### Require tag keys
+
+`ConstructResourceTagValidator` checks keys only. Register it after the taggers that should supply those keys:
+
+```typescript
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { ConstructResourceTagger, ConstructResourceTagValidator } from 'construct-resource-tagger';
+
+Aspects.of(stack).add(
+  new ConstructResourceTagger({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    tags: { env: 'prod', team: 'platform' },
+  }),
+);
+
+Aspects.of(stack).add(
+  new ConstructResourceTagValidator({
+    resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+    requiredTagKeys: ['env', 'team'],
+  }),
+);
+```
+
 ## Options
 
 `ConstructResourceTagger` accepts the following options.
@@ -258,6 +284,15 @@ Aspects.of(stack).add(
 |--------|------|----------|-------------|
 | `scopes` | `IConstruct[]` | Yes | Scopes that receive every tagger. Must contain at least one scope. |
 | `taggers` | `ConstructResourceTagger[]` | Yes | Aspects registered on each scope, in array order. A later tagger overwrites the same key when priorities are equal. Must contain at least one tagger. |
+
+`ConstructResourceTagValidator` accepts the following options.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `resourceTypes` | `string[]` | Yes | CloudFormation type names (for example `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
+| `requiredTagKeys` | `string[]` | Yes | Tag keys that must be present on each matching resource. Values are not checked. Must contain at least one entry. |
+| `pathFilter` | `string` | No | When set, only resources whose construct path matches this prefix at `/`-delimited segment boundaries are checked. Cannot be combined with `pathMatcher`. |
+| `pathMatcher` | `IPathMatcher` | No | Custom path matcher (`PathMatcher.pattern(...)` or `{ matches: (node) => boolean }`). Cannot be combined with `pathFilter`. |
 
 ## API
 
