@@ -401,6 +401,9 @@ public visit(node: IConstruct): void
 
 Reports missing required tag keys when `node` is an L1 resource whose CloudFormation type matches a configured resource type and optionally matches `pathFilter` or `pathMatcher`.
 
+Tags that cannot be read add an
+error annotation. Other constructs are left unchanged.
+
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.ConstructResourceTagValidator.visit.parameter.node"></a>
 
 - *Type:* constructs.IConstruct
@@ -422,7 +425,7 @@ Built-in {@link IPathMatcher} implementations for construct path matching.
 
 | **Name** | **Description** |
 | --- | --- |
-| <code><a href="#construct-resource-tagger.PathMatcher.matches">matches</a></code> | Returns whether `node` should receive tags. |
+| <code><a href="#construct-resource-tagger.PathMatcher.matches">matches</a></code> | Returns whether the aspect should act on `node`. |
 
 ---
 
@@ -432,7 +435,7 @@ Built-in {@link IPathMatcher} implementations for construct path matching.
 public matches(node: IConstruct): boolean
 ```
 
-Returns whether `node` should receive tags.
+Returns whether the aspect should act on `node`.
 
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.PathMatcher.matches.parameter.node"></a>
 
@@ -498,13 +501,16 @@ Path segments to match (for example `Prod` or `App/Prod`).
 
 - *Implemented By:* <a href="#construct-resource-tagger.PathMatcher">PathMatcher</a>, <a href="#construct-resource-tagger.IPathMatcher">IPathMatcher</a>
 
-Decides whether a construct should be tagged based on its location in the construct tree.
+Decides whether a construct is selected based on its location in the construct tree.
+
+{@link ConstructResourceTagger } applies tags to a selected construct.
+{@link ConstructResourceTagValidator } checks required tag keys on a selected construct.
 
 #### Methods <a name="Methods" id="Methods"></a>
 
 | **Name** | **Description** |
 | --- | --- |
-| <code><a href="#construct-resource-tagger.IPathMatcher.matches">matches</a></code> | Returns whether `node` should receive tags. |
+| <code><a href="#construct-resource-tagger.IPathMatcher.matches">matches</a></code> | Returns whether the aspect should act on `node`. |
 
 ---
 
@@ -514,7 +520,7 @@ Decides whether a construct should be tagged based on its location in the constr
 public matches(node: IConstruct): boolean
 ```
 
-Returns whether `node` should receive tags.
+Returns whether the aspect should act on `node`.
 
 ###### `node`<sup>Required</sup> <a name="node" id="construct-resource-tagger.IPathMatcher.matches.parameter.node"></a>
 

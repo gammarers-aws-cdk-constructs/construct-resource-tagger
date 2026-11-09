@@ -1,6 +1,7 @@
 import { TagManager } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 
+/** Message carried by {@link ConstructResourceTaggerUnreadableTagsError}. */
 const unreadableTagsMessage = 'Tags cannot be read from the construct.';
 
 /**
@@ -10,6 +11,9 @@ const unreadableTagsMessage = 'Tags cannot be read from the construct.';
 export abstract class ConstructResourceTaggerError extends Error {
   override readonly name: string = 'ConstructResourceTaggerError';
 
+  /**
+   * @param message - Error message shown to the caller that catches this error.
+   */
   protected constructor(message: string) {
     super(message);
     Object.setPrototypeOf(this, ConstructResourceTaggerError.prototype);
@@ -23,6 +27,9 @@ export abstract class ConstructResourceTaggerError extends Error {
 export class ConstructResourceTaggerUnreadableTagsError extends ConstructResourceTaggerError {
   override readonly name: string = 'ConstructResourceTaggerUnreadableTagsError';
 
+  /**
+   * Creates an error for a construct whose tags cannot be read.
+   */
   constructor() {
     super(unreadableTagsMessage);
     Object.setPrototypeOf(this, ConstructResourceTaggerUnreadableTagsError.prototype);

@@ -80,7 +80,8 @@ export class ConstructResourceTagValidator implements IAspect {
   /**
    * Reports missing required tag keys when `node` is an L1 resource whose
    * CloudFormation type matches a configured resource type and optionally
-   * matches `pathFilter` or `pathMatcher`.
+   * matches `pathFilter` or `pathMatcher`. Tags that cannot be read add an
+   * error annotation. Other constructs are left unchanged.
    *
    * @param node - Construct visited during aspect traversal.
    */

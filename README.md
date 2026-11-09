@@ -20,10 +20,13 @@ AWS CDK aspects that apply tags to matching L1 (`CfnResource`) resources during 
 - Register once on a scope with `Aspects.of(scope).add(...)`
 - Register one ordered list of taggers on one or more scopes with `ConstructResourceTagger.apply`
 - Report missing required tag keys on matching L1 resources with `ConstructResourceTagValidator`
+- Leave a construct unchanged when it is not a matching L1 resource, or when its path does not match
 
 ## How it works
 
 Register `ConstructResourceTagger` on a scope with `Aspects.of(scope).add(...)`. `ConstructResourceTagger.apply` does the same registration for one ordered list of taggers on every scope in `scopes`. During synthesis, CDK visits each construct in that scope. The aspect applies tags when the construct is an L1 resource whose CloudFormation type is listed in `resourceTypes` and, when set, whose path matches `pathFilter` or `pathMatcher`. Tag values come from a fixed map or from a function of that construct. Existing keys are replaced unless `overwrite` is `false`. Each applied tag is added with `Tags.of(node).add`, including any `tagProps`.
+
+Constructs that are not L1 resources, whose CloudFormation type is not listed, or whose path does not match, are left unchanged. When `overwrite` is `false`, tag keys that are already present are also left unchanged. `Tags.of` does not add a `Tags` property on resource types that CloudFormation does not tag, such as `AWS::IAM::Policy`.
 
 `ConstructResourceTagValidator` checks that required tag keys are present on matching L1 resources. It does not apply tags. Register it after the taggers on the same scope when those taggers should satisfy the check. Aspects run in registration order. A missing key, or tags that cannot be read, adds an error annotation and synthesis fails. Resources of other types, and resources outside `pathFilter` or `pathMatcher`, are left unchanged.
 
@@ -51,13 +54,22 @@ pnpm add construct-resource-tagger
 
 ## Usage
 
+### Minimal deployable app
+
+Place this in the CDK app entry, such as `bin/app.ts`. The aspect does not create resources. The stack below creates one bucket so the tags are visible after deploy.
+
 ```typescript
 import { App, Aspects, Stack } from 'aws-cdk-lib';
 import { CfnBucket } from 'aws-cdk-lib/aws-s3';
 import { ConstructResourceTagger } from 'construct-resource-tagger';
 
 const app = new App();
-const stack = new Stack(app, 'MyStack');
+const stack = new Stack(app, 'MyStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+});
 
 Aspects.of(stack).add(
   new ConstructResourceTagger({
@@ -72,7 +84,15 @@ Aspects.of(stack).add(
 new CfnBucket(stack, 'Bucket', {
   bucketName: 'my-example-bucket',
 });
+
+app.synth();
 ```
+
+Deploy checklist:
+
+1. Install this package and peers (`aws-cdk-lib`, `constructs`) in your CDK app.
+2. Choose a globally unique `bucketName`. Change `resourceTypes` and the L1 resource when you are not tagging an S3 bucket.
+3. From the CDK app: `npx cdk deploy MyStack`
 
 ### Dynamic tag values
 
