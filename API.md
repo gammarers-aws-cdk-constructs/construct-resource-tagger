@@ -3,6 +3,56 @@
 
 ## Structs <a name="Structs" id="Structs"></a>
 
+### ApplyResourceTaggersProps <a name="ApplyResourceTaggersProps" id="construct-resource-tagger.ApplyResourceTaggersProps"></a>
+
+Configuration for {@link ConstructResourceTagger.apply}.
+
+#### Initializer <a name="Initializer" id="construct-resource-tagger.ApplyResourceTaggersProps.Initializer"></a>
+
+```typescript
+import { ApplyResourceTaggersProps } from 'construct-resource-tagger'
+
+const applyResourceTaggersProps: ApplyResourceTaggersProps = { ... }
+```
+
+#### Properties <a name="Properties" id="Properties"></a>
+
+| **Name** | **Type** | **Description** |
+| --- | --- | --- |
+| <code><a href="#construct-resource-tagger.ApplyResourceTaggersProps.property.scopes">scopes</a></code> | <code>constructs.IConstruct[]</code> | Scopes that receive every tagger. |
+| <code><a href="#construct-resource-tagger.ApplyResourceTaggersProps.property.taggers">taggers</a></code> | <code><a href="#construct-resource-tagger.ConstructResourceTagger">ConstructResourceTagger</a>[]</code> | Aspects registered on each scope, in array order. |
+
+---
+
+##### `scopes`<sup>Required</sup> <a name="scopes" id="construct-resource-tagger.ApplyResourceTaggersProps.property.scopes"></a>
+
+```typescript
+public readonly scopes: IConstruct[];
+```
+
+- *Type:* constructs.IConstruct[]
+
+Scopes that receive every tagger.
+
+Must contain at least one scope.
+
+---
+
+##### `taggers`<sup>Required</sup> <a name="taggers" id="construct-resource-tagger.ApplyResourceTaggersProps.property.taggers"></a>
+
+```typescript
+public readonly taggers: ConstructResourceTagger[];
+```
+
+- *Type:* <a href="#construct-resource-tagger.ConstructResourceTagger">ConstructResourceTagger</a>[]
+
+Aspects registered on each scope, in array order.
+
+A later tagger overwrites the same tag key when priorities are equal.
+Must contain at least one tagger.
+
+---
+
 ### ConstructResourceTaggerProps <a name="ConstructResourceTaggerProps" id="construct-resource-tagger.ConstructResourceTaggerProps"></a>
 
 Configuration for {@link ConstructResourceTagger}.
@@ -140,6 +190,7 @@ CDK aspect that applies tags to L1 resources matching configured CloudFormation 
 
 Register with `Aspects.of(scope).add(new ConstructResourceTagger({ ... }))`
 to tag matching {@link CfnResource} instances during synthesis.
+{@link ConstructResourceTagger.apply} registers several taggers on one or more scopes.
 
 #### Initializers <a name="Initializers" id="construct-resource-tagger.ConstructResourceTagger.Initializer"></a>
 
@@ -191,6 +242,31 @@ Construct visited during aspect traversal.
 
 ---
 
+#### Static Functions <a name="Static Functions" id="Static Functions"></a>
+
+| **Name** | **Description** |
+| --- | --- |
+| <code><a href="#construct-resource-tagger.ConstructResourceTagger.apply">apply</a></code> | Registers each tagger on every scope, preserving tagger order. |
+
+---
+
+##### `apply` <a name="apply" id="construct-resource-tagger.ConstructResourceTagger.apply"></a>
+
+```typescript
+import { ConstructResourceTagger } from 'construct-resource-tagger'
+
+ConstructResourceTagger.apply(props: ApplyResourceTaggersProps)
+```
+
+Registers each tagger on every scope, preserving tagger order.
+
+###### `props`<sup>Required</sup> <a name="props" id="construct-resource-tagger.ConstructResourceTagger.apply.parameter.props"></a>
+
+- *Type:* <a href="#construct-resource-tagger.ApplyResourceTaggersProps">ApplyResourceTaggersProps</a>
+
+Scopes and the taggers to register on each of them.
+
+---
 
 
 

@@ -1,4 +1,4 @@
-import { CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
+import { Aspects, CfnResource, IAspect, TagManager, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 import { IPathMatcher, PathMatcher } from './path-matcher';
 
@@ -12,6 +12,21 @@ export interface ConstructResourceTagValues {
    * @returns Tag key-value pairs applied to `node`.
    */
   (node: IConstruct): Record<string, string>;
+}
+
+/** Configuration for {@link ConstructResourceTagger.apply}. */
+export interface ApplyResourceTaggersProps {
+  /**
+   * Scopes that receive every tagger.
+   * Must contain at least one scope.
+   */
+  readonly scopes: IConstruct[];
+  /**
+   * Aspects registered on each scope, in array order.
+   * A later tagger overwrites the same tag key when priorities are equal.
+   * Must contain at least one tagger.
+   */
+  readonly taggers: ConstructResourceTagger[];
 }
 
 /** Configuration for {@link ConstructResourceTagger}. */
@@ -135,8 +150,32 @@ const resolveTags = (
  *
  * Register with `Aspects.of(scope).add(new ConstructResourceTagger({ ... }))`
  * to tag matching {@link CfnResource} instances during synthesis.
+ * {@link ConstructResourceTagger.apply} registers several taggers on one or more scopes.
  */
 export class ConstructResourceTagger implements IAspect {
+  /**
+   * Registers each tagger on every scope, preserving tagger order.
+   *
+   * @param props - Scopes and the taggers to register on each of them.
+   * @throws If `scopes` is empty.
+   * @throws If `taggers` is empty.
+   */
+  public static apply(props: ApplyResourceTaggersProps): void {
+    if (props.scopes.length === 0) {
+      throw new Error('scopes must contain at least one scope.');
+    }
+    if (props.taggers.length === 0) {
+      throw new Error('taggers must contain at least one tagger.');
+    }
+
+    for (const scope of props.scopes) {
+      const aspects = Aspects.of(scope);
+      for (const tagger of props.taggers) {
+        aspects.add(tagger);
+      }
+    }
+  }
+
   private readonly resourceTypes: ReadonlySet<string>;
   private readonly tags: Record<string, string> | ConstructResourceTagValues;
   private readonly pathMatcher?: IPathMatcher;

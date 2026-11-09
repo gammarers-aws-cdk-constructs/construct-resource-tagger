@@ -18,10 +18,11 @@ AWS CDK aspect that applies tags to matching L1 (`CfnResource`) resources during
 - Control whether existing tag keys are overwritten (`overwrite`)
 - Forward CDK `TagProps` such as `priority` and `applyToLaunchedInstances` (`tagProps`)
 - Register once on a scope with `Aspects.of(scope).add(...)`
+- Register one ordered list of taggers on one or more scopes with `ConstructResourceTagger.apply`
 
 ## How it works
 
-Register `ConstructResourceTagger` on a scope with `Aspects.of(scope).add(...)`. During synthesis, CDK visits each construct in that scope. The aspect applies tags when the construct is an L1 resource whose CloudFormation type is listed in `resourceTypes` and, when set, whose path matches `pathFilter` or `pathMatcher`. Tag values come from a fixed map or from a function of that construct. Existing keys are replaced unless `overwrite` is `false`. Each applied tag is added with `Tags.of(node).add`, including any `tagProps`.
+Register `ConstructResourceTagger` on a scope with `Aspects.of(scope).add(...)`. `ConstructResourceTagger.apply` does the same registration for one ordered list of taggers on every scope in `scopes`. During synthesis, CDK visits each construct in that scope. The aspect applies tags when the construct is an L1 resource whose CloudFormation type is listed in `resourceTypes` and, when set, whose path matches `pathFilter` or `pathMatcher`. Tag values come from a fixed map or from a function of that construct. Existing keys are replaced unless `overwrite` is `false`. Each applied tag is added with `Tags.of(node).add`, including any `tagProps`.
 
 ## Installation
 
@@ -113,6 +114,30 @@ Aspects.of(stack).add(
     },
   }),
 );
+```
+
+### Several taggers and scopes
+
+`ConstructResourceTagger.apply` registers one ordered list of taggers on every scope in `scopes`. Use it when the same taggers should apply to more than one stack, or when several taggers should be registered together. Taggers run in array order. When two taggers set the same key with equal priority, the later tagger wins.
+
+```typescript
+import { CfnBucket } from 'aws-cdk-lib/aws-s3';
+import { CfnQueue } from 'aws-cdk-lib/aws-sqs';
+import { ConstructResourceTagger } from 'construct-resource-tagger';
+
+ConstructResourceTagger.apply({
+  scopes: [prodStack, stagingStack],
+  taggers: [
+    new ConstructResourceTagger({
+      resourceTypes: [CfnBucket.CFN_RESOURCE_TYPE_NAME],
+      tags: { owner: 'platform' },
+    }),
+    new ConstructResourceTagger({
+      resourceTypes: [CfnQueue.CFN_RESOURCE_TYPE_NAME],
+      tags: { team: 'platform' },
+    }),
+  ],
+});
 ```
 
 ### Scoped tagging with `pathFilter`
@@ -216,6 +241,8 @@ Aspects.of(stack).add(
 
 ## Options
 
+`ConstructResourceTagger` accepts the following options.
+
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | `resourceTypes` | `string[]` | Yes | CloudFormation type names (for example `CfnBucket.CFN_RESOURCE_TYPE_NAME`). Must contain at least one entry. |
@@ -224,6 +251,13 @@ Aspects.of(stack).add(
 | `pathMatcher` | `IPathMatcher` | No | Custom path matcher (`PathMatcher.pattern(...)` or `{ matches: (node) => boolean }`). Cannot be combined with `pathFilter`. |
 | `overwrite` | `boolean` | No | When `false`, skip tag keys that already exist on the resource (default: `true`) |
 | `tagProps` | `TagProps` | No | Options forwarded to `Tags.of(node).add(...)`, such as `priority` and `applyToLaunchedInstances` |
+
+`ConstructResourceTagger.apply` accepts the following options.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `scopes` | `IConstruct[]` | Yes | Scopes that receive every tagger. Must contain at least one scope. |
+| `taggers` | `ConstructResourceTagger[]` | Yes | Aspects registered on each scope, in array order. A later tagger overwrites the same key when priorities are equal. Must contain at least one tagger. |
 
 ## API
 
