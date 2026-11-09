@@ -1,18 +1,33 @@
 import { TagManager } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 
+const unreadableTagsMessage = 'Tags cannot be read from the construct.';
+
 /**
- * Tag keys read from a construct, or a signal that they could not be read.
- * Unreadable tags are not the same as a resource that has no tags.
+ * Base error for tag-key reading inside this package.
+ * Not part of the published entry point.
  */
-export type ExistingTagKeyRead =
-  | {
-    readonly kind: 'readable';
-    readonly keys: ReadonlySet<string>;
+export abstract class ConstructResourceTaggerError extends Error {
+  override readonly name: string = 'ConstructResourceTaggerError';
+
+  protected constructor(message: string) {
+    super(message);
+    Object.setPrototypeOf(this, ConstructResourceTaggerError.prototype);
   }
-  | {
-    readonly kind: 'unreadable';
-  };
+}
+
+/**
+ * Thrown when a construct has no tag manager, or its rendered tags are not an array.
+ * A resource with no tags is not this error.
+ */
+export class ConstructResourceTaggerUnreadableTagsError extends ConstructResourceTaggerError {
+  override readonly name: string = 'ConstructResourceTaggerUnreadableTagsError';
+
+  constructor() {
+    super(unreadableTagsMessage);
+    Object.setPrototypeOf(this, ConstructResourceTaggerUnreadableTagsError.prototype);
+  }
+}
 
 /**
  * Reads a tag key from a rendered tag entry in either CDK (`key`) or
@@ -41,23 +56,22 @@ const tagKey = (tag: unknown): string | undefined => {
  * Collects tag keys already present on a construct via its {@link TagManager}.
  *
  * @param node - Construct that may expose a tag manager.
- * @returns The keys when tags can be read. No tags is an empty key set.
- * `kind: 'unreadable'` means the construct has no tag manager, or rendered
- * tags are not an array.
+ * @returns Existing tag keys. An empty set means the resource has no tags.
+ * @throws {@link ConstructResourceTaggerUnreadableTagsError} when tags cannot be read.
  */
-export const readExistingTagKeys = (node: IConstruct): ExistingTagKeyRead => {
+export const readExistingTagKeys = (node: IConstruct): ReadonlySet<string> => {
   const tagManager = TagManager.of(node);
   if (!tagManager) {
-    return { kind: 'unreadable' };
+    throw new ConstructResourceTaggerUnreadableTagsError();
   }
 
   const rendered = tagManager.renderTags();
   // TagManager.renderTags() returns undefined when the resource has no tags.
   if (rendered === undefined) {
-    return { kind: 'readable', keys: new Set() };
+    return new Set();
   }
   if (!Array.isArray(rendered)) {
-    return { kind: 'unreadable' };
+    throw new ConstructResourceTaggerUnreadableTagsError();
   }
 
   const keys = new Set<string>();
@@ -67,5 +81,5 @@ export const readExistingTagKeys = (node: IConstruct): ExistingTagKeyRead => {
       keys.add(key);
     }
   }
-  return { kind: 'readable', keys };
+  return keys;
 };

@@ -1,6 +1,6 @@
 import { Aspects, CfnResource, IAspect, TagProps, Tags } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
-import { readExistingTagKeys } from './existing-tag-keys';
+import { ConstructResourceTaggerUnreadableTagsError, readExistingTagKeys } from './existing-tag-keys';
 import { IPathMatcher, PathMatcher } from './path-matcher';
 
 /**
@@ -181,15 +181,22 @@ export class ConstructResourceTagger implements IAspect {
     const tags = resolveTags(this.tags, node);
     let existingTagKeys: ReadonlySet<string> | undefined;
     if (!this.overwrite) {
-      const read = readExistingTagKeys(node);
-      existingTagKeys = read.kind === 'readable' ? read.keys : new Set();
+      try {
+        existingTagKeys = readExistingTagKeys(node);
+      } catch (error) {
+        if (!(error instanceof ConstructResourceTaggerUnreadableTagsError)) {
+          throw error;
+        }
+        // Unreadable tags are treated as absent so missing keys can still be added.
+        existingTagKeys = new Set();
+      }
     }
 
-    Object.entries(tags).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(tags)) {
       if (existingTagKeys?.has(key)) {
-        return;
+        continue;
       }
       Tags.of(node).add(key, value, this.tagProps);
-    });
+    }
   }
 }

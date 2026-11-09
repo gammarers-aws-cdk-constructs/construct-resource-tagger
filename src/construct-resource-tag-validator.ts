@@ -1,6 +1,6 @@
 import { Annotations, CfnResource, IAspect } from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
-import { readExistingTagKeys } from './existing-tag-keys';
+import { ConstructResourceTaggerUnreadableTagsError, readExistingTagKeys } from './existing-tag-keys';
 import { IPathMatcher, PathMatcher } from './path-matcher';
 
 /** Configuration for {@link ConstructResourceTagValidator}. */
@@ -95,14 +95,19 @@ export class ConstructResourceTagValidator implements IAspect {
       return;
     }
 
-    const read = readExistingTagKeys(node);
-    if (read.kind === 'unreadable') {
+    let keys: ReadonlySet<string>;
+    try {
+      keys = readExistingTagKeys(node);
+    } catch (error) {
+      if (!(error instanceof ConstructResourceTaggerUnreadableTagsError)) {
+        throw error;
+      }
       Annotations.of(node).addError('Cannot read tags to verify required tag keys.');
       return;
     }
 
     for (const key of this.requiredTagKeys) {
-      if (read.keys.has(key)) {
+      if (keys.has(key)) {
         continue;
       }
       Annotations.of(node).addError(`Missing required tag key "${key}".`);

@@ -207,6 +207,27 @@ describe('ConstructResourceTagValidator', () => {
     annotations.hasNoError('/TestStack/Bucket', 'Missing required tag key "env".');
   });
 
+  test('should rethrow unexpected errors while reading tags', () => {
+    const tagManagerOfSpy = jest.spyOn(TagManager, 'of').mockImplementation(() => {
+      throw new Error('unexpected');
+    });
+
+    try {
+      expect(() =>
+        annotationsFor(
+          (stack) => {
+            new CfnBucket(stack, 'Bucket', {
+              bucketName: 'construct-resource-tag-validator-unexpected-read',
+            });
+          },
+          validator(['env']),
+        ),
+      ).toThrow('unexpected');
+    } finally {
+      tagManagerOfSpy.mockRestore();
+    }
+  });
+
   test('should report an error when rendered tags are not an array', () => {
     const tagManagerOfSpy = jest.spyOn(TagManager, 'of');
 
